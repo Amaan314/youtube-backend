@@ -3,6 +3,7 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGener
 from langchain.schema import Document
 from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
+from youtube_transcript_api import YouTubeTranscriptApi
 import time
 import json
 import requests
@@ -15,76 +16,6 @@ embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_a
 # Enhanced cache for video transcripts and summaries
 video_cache = {}
 
-# def get_transcript(video_id):
-#     """Fetch and cache video transcript with timestamps."""
-#     # Check if transcript is already cached
-#     if video_id in video_cache and "Transcript" in video_cache[video_id]:
-#         print(f"Using cached transcript for video ID: {video_id}")
-#         return video_cache[video_id]["Transcript"]
-    
-#     try:
-#         transcript = YouTubeTranscriptApi()
-#         caption = transcript.fetch(video_id)
-#         # print(caption)
-#         formatted_lines = []
-#         for snippet in caption.snippets:
-#             total_seconds = int(snippet.start)
-#             hours = total_seconds // 3600
-#             minutes = (total_seconds % 3600) // 60
-#             seconds = total_seconds % 60
-#             timestamp = f"[{hours:02}:{minutes:02}:{seconds:02}]"
-#             formatted_line = f"{timestamp} {snippet.text}"
-#             formatted_lines.append(formatted_line)
-        
-#         full_transcript = " ".join(formatted_lines)
-        
-#         # Initialize cache structure for this video
-#         if video_id not in video_cache:
-#             video_cache[video_id] = {}
-#         video_cache[video_id]["Transcript"] = full_transcript
-        
-#         return full_transcript
-        
-#     except Exception as e:
-#         print(f"Unexpected error fetching transcript: {e}")
-#         return ''
-
-def fetch_transcript(video_id):
-    # headers = {
-    #     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-    # }
-
-    url = f'https://www.youtube.com/watch?v={video_id}'
-    resp = requests.get(url)
-    html = resp.text
-
-    initial_data = re.search(r'ytInitialPlayerResponse\s*=\s*({.+?});', html)
-    if not initial_data:
-        raise Exception("Could not find ytInitialPlayerResponse")
-
-    data = json.loads(initial_data.group(1))
-    captions = data.get('captions')
-    if not captions:
-        raise Exception("No captions available")
-
-    tracks = captions['playerCaptionsTracklistRenderer']['captionTracks']
-    transcript_url = tracks[0]['baseUrl']
-    transcript_xml = requests.get(transcript_url).text
-    root = ET.fromstring(transcript_xml)
-
-    transcript = []
-    for elem in root.findall('text'):
-        start = float(elem.attrib['start'])
-        dur = float(elem.attrib.get('dur', 0))
-        text = elem.text or ''
-        transcript.append({
-            'start': start,
-            'duration': dur,
-            'text': text.replace('\n', ' ')
-        })
-
-    return transcript
-
 def get_transcript(video_id):
     """Fetch and cache video transcript with timestamps."""
     # Check if transcript is already cached
@@ -93,19 +24,17 @@ def get_transcript(video_id):
         return video_cache[video_id]["Transcript"]
     
     try:
-        captions = fetch_transcript(video_id)
-        if not captions:
-            print(f"No transcript found for video ID: {video_id}")
-            return ''
+        transcript = YouTubeTranscriptApi()
+        caption = transcript.fetch(video_id)
         # print(caption)
         formatted_lines = []
-        for snippet in captions:
-            total_seconds = int(snippet['start'])
+        for snippet in caption.snippets:
+            total_seconds = int(snippet.start)
             hours = total_seconds // 3600
             minutes = (total_seconds % 3600) // 60
             seconds = total_seconds % 60
-            timestamp = f"({hours:02}:{minutes:02}:{seconds:02})"
-            formatted_line = f"{timestamp} {snippet['text']}"
+            timestamp = f"[{hours:02}:{minutes:02}:{seconds:02}]"
+            formatted_line = f"{timestamp} {snippet.text}"
             formatted_lines.append(formatted_line)
         
         full_transcript = " ".join(formatted_lines)
@@ -120,6 +49,78 @@ def get_transcript(video_id):
     except Exception as e:
         print(f"Unexpected error fetching transcript: {e}")
         return ''
+
+# def fetch_transcript(video_id):
+#     # headers = {
+#     #     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+#     # }
+
+#     url = f'https://www.youtube.com/watch?v={video_id}'
+#     resp = requests.get(url)
+#     html = resp.text
+
+#     initial_data = re.search(r'ytInitialPlayerResponse\s*=\s*({.+?});', html)
+#     if not initial_data:
+#         raise Exception("Could not find ytInitialPlayerResponse")
+
+#     data = json.loads(initial_data.group(1))
+#     captions = data.get('captions')
+#     if not captions:
+#         raise Exception("No captions available")
+
+#     tracks = captions['playerCaptionsTracklistRenderer']['captionTracks']
+#     transcript_url = tracks[0]['baseUrl']
+#     transcript_xml = requests.get(transcript_url).text
+#     root = ET.fromstring(transcript_xml)
+
+#     transcript = []
+#     for elem in root.findall('text'):
+#         start = float(elem.attrib['start'])
+#         dur = float(elem.attrib.get('dur', 0))
+#         text = elem.text or ''
+#         transcript.append({
+#             'start': start,
+#             'duration': dur,
+#             'text': text.replace('\n', ' ')
+#         })
+
+#     return transcript
+
+# def get_transcript(video_id):
+#     """Fetch and cache video transcript with timestamps."""
+#     # Check if transcript is already cached
+#     if video_id in video_cache and "Transcript" in video_cache[video_id]:
+#         print(f"Using cached transcript for video ID: {video_id}")
+#         return video_cache[video_id]["Transcript"]
+    
+#     try:
+#         captions = fetch_transcript(video_id)
+#         if not captions:
+#             print(f"No transcript found for video ID: {video_id}")
+#             return ''
+#         # print(caption)
+#         formatted_lines = []
+#         for snippet in captions:
+#             total_seconds = int(snippet['start'])
+#             hours = total_seconds // 3600
+#             minutes = (total_seconds % 3600) // 60
+#             seconds = total_seconds % 60
+#             timestamp = f"({hours:02}:{minutes:02}:{seconds:02})"
+#             formatted_line = f"{timestamp} {snippet['text']}"
+#             formatted_lines.append(formatted_line)
+        
+#         full_transcript = " ".join(formatted_lines)
+        
+#         # Initialize cache structure for this video
+#         if video_id not in video_cache:
+#             video_cache[video_id] = {}
+#         video_cache[video_id]["Transcript"] = full_transcript
+        
+#         return full_transcript
+        
+#     except Exception as e:
+#         print(f"Unexpected error fetching transcript: {e}")
+#         return ''
 
 def get_clean_transcript(video_id):
     """Get transcript without timestamps for better processing."""
