@@ -4,11 +4,13 @@ from langchain.schema import Document
 from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
 from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api.proxies import WebshareProxyConfig
 import time
 import json
 import requests
 import xml.etree.ElementTree as ET
 import os
+
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite-001", google_api_key=GOOGLE_API_KEY)
 embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=GOOGLE_API_KEY)
@@ -24,8 +26,14 @@ def get_transcript(video_id):
         return video_cache[video_id]["Transcript"]
     
     try:
-        transcript = YouTubeTranscriptApi()
-        caption = transcript.fetch(video_id)
+        ytt_api = YouTubeTranscriptApi(
+            proxy_config=WebshareProxyConfig(
+                proxy_username=os.getenv("username"),
+                proxy_password=os.getenv("password"),
+            )
+        )
+
+        caption = ytt_api.fetch(video_id)
         # print(caption)
         formatted_lines = []
         for snippet in caption.snippets:
