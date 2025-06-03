@@ -1,8 +1,6 @@
 import re
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain.vectorstores import FAISS
 from langchain.schema import Document
-from langchain.chains import RetrievalQA
 from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
 import time
@@ -183,28 +181,6 @@ Your task is to:
 """
 )
 
-def get_video_qa_prompt(summary):
-    """Create QA prompt template with video summary context."""
-    qa_prompt = PromptTemplate(
-        input_variables=["context", "question"],
-        template=f"""
-You are a helpful assistant analyzing YouTube video content.
-
-Here is a summary of the video:
-{summary}
-
-Here are the most relevant transcript segments:
-{{context}}
-
-Question: {{question}}
-
-Answer based on the video content. If the answer involves specific details, try to reference approximate timestamps when available.
-
-Answer:
-"""
-    )
-    return qa_prompt
-
 def ensure_processed_transcript(video_id):
     """Ensure transcript chunks are processed and cached for a video."""
     if video_id not in video_cache:
@@ -257,136 +233,3 @@ async def summarize_video(video_id):
     except Exception as e:
         print(f"Error creating video summary: {e}")
         return {"error": f"Error creating summary: {str(e)}"}
-
-async def answer_video_question(video_id, question):
-    """Answer questions about video content using transcript and summary."""
-    # Ensure we have summary (will create if not cached)
-    if video_id not in video_cache or "Summary" not in video_cache[video_id]:
-        summary = await summarize_video(video_id)
-        if isinstance(summary, dict) and "error" in summary:
-            return summary
-    else:
-        print(f"Using cached video summary for video ID: {video_id}")
-        summary = video_cache[video_id]["Summary"]
-    
-    # Get processed transcript chunks (will process if not cached)
-    chunks = ensure_processed_transcript(video_id)
-    if not chunks:
-        return {"error": "No transcript chunks found after processing."}
-    
-    # Check if vectorstore is already cached
-    if "Vectorstore" not in video_cache[video_id]:
-        print(f"Creating and caching vectorstore for video ID: {video_id}")
-        try:
-            vectorstore = FAISS.from_documents(chunks, embeddings)
-            video_cache[video_id]["Vectorstore"] = vectorstore
-        except Exception as e:
-            return {"error": f"Error creating vectorstore: {str(e)}"}
-    else:
-        print(f"Using cached vectorstore for video ID: {video_id}")
-        vectorstore = video_cache[video_id]["Vectorstore"]
-    
-    try:
-        # Create QA chain
-        qa_prompt = get_video_qa_prompt(summary)
-        retriever = vectorstore.as_retriever(search_type="similarity", k=4)
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=llm,
-            retriever=retriever,
-            chain_type="stuff",
-            return_source_documents=True,
-            chain_type_kwargs={"prompt": qa_prompt},
-        )
-
-        answer = qa_chain(question)
-        return answer
-        
-    except Exception as e:
-        print(f"Error answering question: {e}")
-        return {"error": f"Error processing question: {str(e)}"}
-
-# Utility functions for cache management
-def clear_video_cache(video_id=None):
-    """Clear cache for a specific video or all videos."""
-    global video_cache
-    if video_id:
-        if video_id in video_cache:
-            del video_cache[video_id]
-            print(f"Video cache cleared for video ID: {video_id}")
-    else:
-        video_cache.clear()
-        print("All video cache cleared")
-
-def get_video_cache_stats():
-    """Get statistics about what's cached for videos."""
-    stats = {}
-    for video_id, data in video_cache.items():
-        stats[video_id] = {
-            "has_transcript": "Transcript" in data,
-            "has_clean_transcript": "CleanTranscript" in data,
-            "has_transcript_chunks": "TranscriptChunks" in data,
-            "has_summary": "Summary" in data,
-            "has_vectorstore": "Vectorstore" in data,
-            "transcript_length": len(data.get("Transcript", "")),
-            "clean_transcript_length": len(data.get("CleanTranscript", "")),
-            "chunk_count": len(data.get("TranscriptChunks", []))
-        }
-    return stats
-
-def get_transcript_preview(video_id, max_chars=500):
-    """Get a preview of the transcript for debugging."""
-    if video_id in video_cache and "Transcript" in video_cache[video_id]:
-        transcript = video_cache[video_id]["Transcript"]
-        if len(transcript) > max_chars:
-            return transcript[:max_chars] + "..."
-        return transcript
-    return "No transcript found in cache"
-
-# Advanced utility: Get transcript segments by time range
-def get_transcript_segment(video_id, start_time=None, end_time=None):
-    """Get transcript segment between specified timestamps (in seconds)."""
-    if video_id not in video_cache or "Transcript" not in video_cache[video_id]:
-        return "Transcript not found in cache"
-    
-    transcript = video_cache[video_id]["Transcript"]
-    
-    # If no time range specified, return full transcript
-    if start_time is None and end_time is None:
-        return transcript
-    
-    # Extract segments based on timestamps
-    segments = []
-    timestamp_pattern = r'\[(\d{2}):(\d{2}):(\d{2})\]([^[]*)'
-    matches = re.findall(timestamp_pattern, transcript)
-    
-    for match in matches:
-        hours, minutes, seconds, text = match
-        timestamp_seconds = int(hours) * 3600 + int(minutes) * 60 + int(seconds)
-        
-        # Check if timestamp is within range
-        if start_time is not None and timestamp_seconds < start_time:
-            continue
-        if end_time is not None and timestamp_seconds > end_time:
-            break
-            
-        segments.append(f"[{hours}:{minutes}:{seconds}]{text}")
-    
-    return " ".join(segments)
-
-# Example usage functions
-def example_usage():
-    """Example of how to use the video QA system."""
-    video_id = "your_video_id_here"
-    
-    # Get summary
-    summary = summarize_video(video_id)
-    print("Summary:", summary)
-    
-    # Ask questions
-    question = "What are the main points discussed in this video?"
-    answer = answer_video_question(video_id, question)
-    print("Answer:", answer)
-    
-    # Check cache stats
-    stats = get_video_cache_stats()
-    print("Cache stats:", stats)

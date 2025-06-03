@@ -1,7 +1,5 @@
 fastapi
 langchain
 langchain-google-genai
-faiss-cpu
 aiohttp==3.11.11
-isodate==0.6.1
 uvicorn
