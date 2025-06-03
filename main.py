@@ -24,21 +24,6 @@ app.add_middleware(
 async def root():
     return {"message": "YouTube Search API is running"}
 
-@app.get("/search")
-async def search(query: str):
-    """
-    Search YouTube for videos matching the query.
-    """
-    try:
-        results = await search_youtube(query)
-        # print("Search results:", results)
-        df = results
-        results = {
-            "videos": df.to_dict(orient="records")
-        } 
-        return {"results": results}
-    except Exception as e:
-        return {"error": str(e)}
 
 @app.get(
     "/comments/{video_id}",

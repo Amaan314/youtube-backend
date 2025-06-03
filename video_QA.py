@@ -1,5 +1,4 @@
 import re
-from youtube_transcript_api import YouTubeTranscriptApi
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain.vectorstores import FAISS
 from langchain.schema import Document
